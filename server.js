@@ -163,6 +163,38 @@ async function sendList(number, title, description, buttonText, sections) {
 // --- endpoints ---
 app.get("/health", (_req, res) => res.json({ ok: true, instance: INSTANCE }));
 
+// --- Internal Endpoint for Push Notifications (Reminders) ---
+app.post("/push-message", async (req, res) => {
+  try {
+    // 1. Security Check (Reuse WEBHOOK_SECRET or add a new PUSH_SECRET)
+    if (!checkSecret(req)) return res.status(401).json({ error: "Unauthorized" });
+
+    const { number, message, buttons } = req.body;
+
+    if (!number || !message) {
+      return res.status(400).json({ error: "Missing 'number' or 'message'" });
+    }
+
+    console.log(`📤 Pushing message to ${number}`);
+
+    // 2. Send Message
+    if (buttons && Array.isArray(buttons) && buttons.length > 0) {
+      // Send interactive buttons if provided
+      // Strategy: Send text first, then buttons
+      await sendText(number, message);
+      await sendButtons(number, "Recordatorio", "Selecciona una opción", buttons);
+    } else {
+      // Simple text
+      await sendText(number, message);
+    }
+
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("❌ Push error:", e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 async function handleWebhook(req, res) {
   try {
     if (!checkSecret(req)) return res.status(401).send("unauthorized");

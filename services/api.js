@@ -18,9 +18,26 @@ api.interceptors.response.use(response => {
   }
   return response;
 }, error => {
-  console.error("❌ Network Error:", error.message);
+  console.error(`❌ Network Error [${error.config?.url}]:`, error.message);
   return Promise.reject(error);
 });
+
+async function checkConnection() {
+  try {
+    console.log(`📡 Testing connection to: ${API_Base}/services ...`);
+    const res = await api.get("/services");
+    console.log(`✅ API Connection OK! (Status: ${res.status})`);
+    return true;
+  } catch (error) {
+    console.error(`❌ API Connection FAILED: ${error.message}`);
+    if (error.response) {
+      console.error(`   Status: ${error.response.status}`);
+      console.error(`   Data:`, JSON.stringify(error.response.data));
+    }
+    return false;
+  }
+}
+
 
 async function checkPatient(identifier) {
   try {
@@ -109,7 +126,9 @@ async function getDiagnosis(text) {
 }
 
 module.exports = {
+  checkConnection, // ✅ Exported
   checkPatient,
+
   registerPatient,
   getServices,
   getDentists,

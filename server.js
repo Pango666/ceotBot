@@ -337,5 +337,10 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('🔥 UNHANDLED REJECTION at:', promise, 'reason:', reason);
 });
 
-const server = app.listen(PORT, "0.0.0.0", () => console.log(`✅ Bot escuchando en http://localhost:${PORT}`));
+const server = app.listen(PORT, "0.0.0.0", async () => {
+  console.log(`✅ Bot escuchando en http://localhost:${PORT}`);
+
+  // Test API Connection on startup
+  await botLogic.api.checkConnection();
+});
 server.on('error', (e) => console.error("❌ SERVER ERROR:", e));

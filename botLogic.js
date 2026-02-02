@@ -405,4 +405,4 @@ async function handleDiagnosis(session, msg) {
     return resp;
 }
 
-module.exports = { handleMessage, getSession };
+module.exports = { handleMessage, getSession, api };

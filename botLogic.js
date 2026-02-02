@@ -219,7 +219,7 @@ async function handleBookingSelectService(session, msg) {
 
 // ...
 
-async function handleRegisterFinal(session, msg) {
+async function handleRegisterFinal(session, msg, number) {
     const email = msg.toLowerCase() === 'no' ? null : msg;
     session.data.email = email;
 
@@ -227,17 +227,17 @@ async function handleRegisterFinal(session, msg) {
         first_name: session.data.first_name,
         last_name: session.data.last_name,
         ci: session.data.ci,
-        email: session.data.email
+        email: session.data.email,
+        phone: String(number) // ✅ ESTE
     };
 
     const result = await api.registerPatient(registerData);
     session.step = STEPS.IDLE;
 
-    if (result && result.success) {
+    if (result.success) {
         return `✅ Registro exitoso. Bienvenido/a ${session.data.first_name}.\n\nAhora puedes agendar tu cita seleccionando la opción 1 del menú principal.`;
     } else {
-        console.error("Register Error Result:", result);
-        return "❌ Error al registrar. Es posible que el servidor tenga problemas internos. Intenta más tarde.";
+        return "❌ Error al registrar. Intenta más tarde.";
     }
 }
 

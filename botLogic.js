@@ -257,7 +257,10 @@ async function handleRegisterFinal(session, msg, number) {
     const result = await api.registerPatient(registerData);
     session.step = STEPS.IDLE;
 
-    if (result.success) {
+    console.log("🔍 Register Result:", JSON.stringify(result));
+
+    // Fix: Laravel returns { message: "...", patient_id: ... }, not necessarily { success: true }
+    if (result && (result.success || result.patient_id)) {
         return `✅ Registro exitoso. Bienvenido/a ${session.data.first_name}.\n\nAhora puedes agendar tu cita seleccionando la opción 1 del menú principal.`;
     } else {
         return "❌ Error al registrar. Intenta más tarde.";

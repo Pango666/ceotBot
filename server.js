@@ -18,6 +18,53 @@ const EVO_KEY = process.env.EVOLUTION_API_KEY || "";
 const INSTANCE = process.env.EVOLUTION_INSTANCE || "demo";
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
 
+// ============================================
+// 🛡️ ANTI-BAN: Rate Limiting & Human Delays
+// ============================================
+const userLastMessage = new Map(); // phone -> timestamp
+const RATE_LIMIT_MS = Number(process.env.RATE_LIMIT_MS || 2000); // Min 2s between responses
+const MIN_DELAY_MS = Number(process.env.MIN_DELAY_MS || 1000); // Min delay before responding
+const MAX_DELAY_MS = Number(process.env.MAX_DELAY_MS || 3000); // Max random delay
+const TYPING_DELAY_PER_CHAR = 30; // 30ms per character (simulates typing)
+const DISABLE_LISTS = process.env.DISABLE_LISTS === "true"; // Force text-only mode (no interactive lists)
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function randomDelay(min = MIN_DELAY_MS, max = MAX_DELAY_MS) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function calculateTypingDelay(text) {
+  // Simulate human typing speed (capped at 5 seconds max)
+  const len = typeof text === 'string' ? text.length : 50;
+  return Math.min(len * TYPING_DELAY_PER_CHAR, 5000);
+}
+
+function isRateLimited(number) {
+  const last = userLastMessage.get(number);
+  const now = Date.now();
+
+  if (last && (now - last) < RATE_LIMIT_MS) {
+    console.log(`⏳ Rate limited: ${number} (wait ${RATE_LIMIT_MS - (now - last)}ms)`);
+    return true;
+  }
+
+  userLastMessage.set(number, now);
+  return false;
+}
+
+// Cleanup old entries every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  const expiry = 10 * 60 * 1000; // 10 minutes
+  for (const [key, time] of userLastMessage.entries()) {
+    if (now - time > expiry) userLastMessage.delete(key);
+  }
+}, 10 * 60 * 1000);
+// ============================================
+
 console.log("ℹ️ EVO_BASE:", EVO_BASE, "| INSTANCE:", INSTANCE);
 if (!EVO_KEY) console.warn("⚠️ EVOLUTION_API_KEY vacío.");
 
@@ -102,7 +149,14 @@ const evo = axios.create({
   validateStatus: () => true,
 });
 
-async function sendText(number, text) {
+async function sendText(number, text, applyDelay = true) {
+  // 🛡️ ANTI-BAN: Add human-like delay before sending
+  if (applyDelay) {
+    const typingDelay = calculateTypingDelay(text);
+    const humanDelay = randomDelay(500, 1500);
+    await sleep(typingDelay + humanDelay);
+  }
+
   const url = `/message/sendText/${encodeURIComponent(INSTANCE)}`;
   const body = { number: String(number), text: String(text) };
 
@@ -214,6 +268,14 @@ async function handleWebhook(req, res) {
 
     if (!number || !text) return res.status(200).send("no-content");
 
+    // 🛡️ ANTI-BAN: Check rate limit
+    if (isRateLimited(number)) {
+      return res.status(200).send("rate-limited");
+    }
+
+    // 🛡️ ANTI-BAN: Random initial delay (simulates reading the message)
+    await sleep(randomDelay());
+
     // Bot logic
     const response = await botLogic.handleMessage(number, text);
 
@@ -239,21 +301,34 @@ async function handleWebhook(req, res) {
         // STRATEGY: Send Text FIRST (Guarantee delivery of instruction)
         await sendText(number, response.text);
 
-        // Then send the List
-        try {
-          await sendList(number, response.title, "Haz clic abajo 👇", response.buttonText, response.sections);
-        } catch (e) {
-          console.error("⚠️ List failed to send (falling back to text options):", e.message);
-          // Fallback: print options as text
+        // 🛡️ ANTI-BAN: If DISABLE_LISTS is true, skip interactive lists entirely
+        if (DISABLE_LISTS) {
+          console.log("📝 Lists disabled, using text fallback");
           let listText = "\n";
           response.sections.forEach(sec => {
             if (sec.title) listText += `\n📌 *${sec.title}*\n`;
             sec.rows.forEach(row => {
-              // Show "[ID] Title" clearly with bullet
               listText += `🔹 [${row.rowId}] *${row.title}*\n      _${row.description || ""}_\n`;
             });
           });
           await sendText(number, `📋 *Selecciona una opción:*\n(Escribe el número correspondiente)\n${listText}`);
+        } else {
+          // Try sending the List
+          try {
+            await sendList(number, response.title, "Haz clic abajo 👇", response.buttonText, response.sections);
+          } catch (e) {
+            console.error("⚠️ List failed to send (falling back to text options):", e.message);
+            // Fallback: print options as text
+            let listText = "\n";
+            response.sections.forEach(sec => {
+              if (sec.title) listText += `\n📌 *${sec.title}*\n`;
+              sec.rows.forEach(row => {
+                // Show "[ID] Title" clearly with bullet
+                listText += `🔹 [${row.rowId}] *${row.title}*\n      _${row.description || ""}_\n`;
+              });
+            });
+            await sendText(number, `📋 *Selecciona una opción:*\n(Escribe el número correspondiente)\n${listText}`);
+          }
         }
       }
 

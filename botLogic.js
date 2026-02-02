@@ -217,7 +217,28 @@ async function handleBookingSelectService(session, msg) {
     );
 }
 
-// ...
+// --- REGISTRATION HANDLERS ---
+async function handleRegisterAskCI(session, msg) {
+    const ci = msg.trim();
+
+    // Validate CI format (basic validation - at least some digits)
+    if (!/^\d+$/.test(ci)) {
+        return withCancel("❌ El CI debe contener solo números. Por favor ingresa un CI válido:");
+    }
+
+    // Check if patient already exists
+    const check = await api.checkPatient(ci);
+
+    if (check.exists) {
+        session.step = STEPS.IDLE;
+        return `✅ Ya estás registrado/a como *${check.patient.first_name} ${check.patient.last_name}*.\n\nPuedes agendar una cita seleccionando la opción 1 del menú principal.`;
+    }
+
+    // Patient doesn't exist, proceed with registration
+    session.data.ci = ci;
+    session.step = STEPS.REGISTER_ASK_FIRST_NAME;
+    return withCancel("Ingresa tu NOMBRE:");
+}
 
 async function handleRegisterFinal(session, msg, number) {
     const email = msg.toLowerCase() === 'no' ? null : msg;

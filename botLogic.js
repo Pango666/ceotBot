@@ -147,8 +147,10 @@ function handleIdle(session, msg, number) {
 
 // --- BOOKING HANDLERS ---
 async function handleBookingAskCI(session, msg) {
-    const ci = msg;
+    const ci = msg.trim();
+    console.log(`🔍 Checking patient CI: '${ci}'`);
     const check = await api.checkPatient(ci);
+    console.log(`🔍 API Check Result:`, JSON.stringify(check));
 
     if (check.exists) {
         session.data.patient_id = check.patient.id;
@@ -341,10 +343,13 @@ async function handleBookingSelectSlot(session, msg) {
 
 // --- MY APPOINTMENTS ---
 async function handleMyAppointments(session, msg) {
-    const ci = msg;
+    const ci = msg.trim(); // ✅ Clean input
+    console.log(`🔍 [MyAppointments] Checking patient CI: '${ci}'`);
 
     // 1. Verify patient logic fix
     const check = await api.checkPatient(ci);
+    console.log(`🔍 [MyAppointments] API Check Result:`, JSON.stringify(check));
+
     if (!check.exists) {
         session.step = STEPS.IDLE;
         return "🚫 No se encontró ningún paciente registrado con ese CI.\n\nUsa la opción 3 para registrarte.";
